@@ -502,6 +502,12 @@ def _warn_if_no_cron_secret() -> None:
         )
 
 
+@app.get("/")
+def root() -> dict[str, str]:
+    """Évite les erreurs « no response » si la sonde ou le navigateur ouvre la racine."""
+    return {"status": "ok", "service": "clockify-daily-report"}
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
