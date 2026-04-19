@@ -495,6 +495,7 @@ app = FastAPI(title="Clockify daily report", version="1.0.0")
 
 @app.on_event("startup")
 def _warn_if_no_cron_secret() -> None:
+    print(f"[clockify-report] PORT effectif (env)={os.environ.get('PORT', '')!r}")
     if not (os.environ.get("CRON_SECRET") or "").strip():
         print(
             "[clockify-report] CRON_SECRET est vide : /daily-report est accessible sans mot de passe. "
