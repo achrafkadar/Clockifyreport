@@ -7,3 +7,4 @@ settings.env
 *.egg-info/
 .DS_Store
 ._*
+**/._*

@@ -13,6 +13,11 @@ ENV PYTHONDONTWRITEBYTECODE=1
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY config ./config
+COPY services ./services
+COPY templates ./templates
+COPY utils ./utils
+COPY jobs ./jobs
 COPY app.py ./
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
