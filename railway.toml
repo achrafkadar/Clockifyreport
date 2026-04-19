@@ -1,0 +1,12 @@
+# https://docs.railway.com/reference/config-as-code
+# Ce fichier prime sur les réglages du dashboard pour éviter un vieux "Start command" cassé.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Laisser le ENTRYPOINT du Dockerfile. Si tu avais un « Custom start » dans le dashboard, ce fichier le remplace.
+healthcheckPath = "/health"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
