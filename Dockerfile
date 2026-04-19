@@ -1,4 +1,4 @@
-# Image explicite : le PORT est lu au démarrage du conteneur (variable Railway).
+# Railway injecte PORT au runtime (souvent 8080). Forme shell pour CMD = expansion correcte de $PORT.
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -11,5 +11,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py ./
 
-# ${PORT} est injecté par Railway au runtime (souvent 8080).
-CMD ["sh", "-c", "exec python -m uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Forme shell (pas JSON) : $PORT est lu au démarrage du conteneur, pas au build.
+CMD exec python -m uvicorn app:app --host 0.0.0.0 --port ${PORT:-8000}
