@@ -20,6 +20,7 @@ from services.clockify_client import (
     report_range_today_partial,
 )
 from templates.email_report import render_email_html
+from utils.helpers import parse_email_recipients
 from utils.i18n import I18n
 
 RESEND_USER_AGENT = "clockify-daily-report/2.0"
@@ -32,9 +33,9 @@ def _require_env(name: str) -> str:
     return v
 
 
-def _send_resend(to_addr: str, from_addr: str, subject: str, html_body: str) -> None:
+def _send_resend(to_addrs: list[str], from_addr: str, subject: str, html_body: str) -> None:
     api_key = _require_env("RESEND_API_KEY")
-    payload = {"from": from_addr, "to": [to_addr], "subject": subject, "html": html_body}
+    payload = {"from": from_addr, "to": to_addrs, "subject": subject, "html": html_body}
     with httpx.Client(timeout=90.0) as client:
         r = client.post(
             "https://api.resend.com/emails",
@@ -48,7 +49,13 @@ def _send_resend(to_addr: str, from_addr: str, subject: str, html_body: str) -> 
 def run_daily_email_job() -> dict[str, Any]:
     cfg = load_config()
     api_key = _require_env("CLOCKIFY_API_KEY")
-    email_to = os.environ.get("EMAIL_TO", "Ads@wenov.ca").strip()
+    raw_to = os.environ.get(
+        "EMAIL_TO",
+        "ads@wenov.ca,wenovsolutions@gmail.com",
+    ).strip()
+    recipients = parse_email_recipients(raw_to)
+    if not recipients:
+        raise HTTPException(status_code=500, detail="EMAIL_TO vide ou invalide (liste d’e-mails séparés par des virgules).")
     email_from = _require_env("EMAIL_FROM")
     workspace_name = cfg.workspace_name
     i18n = I18n(cfg.locale)
@@ -87,13 +94,13 @@ def run_daily_email_job() -> dict[str, Any]:
 
     html_body = render_email_html(report, i18n)
     subject = f"[Clockify] {workspace_name} — {report_date.isoformat()}"
-    _send_resend(email_to, email_from, subject, html_body)
+    _send_resend(recipients, email_from, subject, html_body)
 
     return {
         "ok": True,
         "workspace": workspace_name,
         "report_date": report_date.isoformat(),
-        "recipients": [email_to],
+        "recipients": recipients,
         "team_hours": round(report.total_team_hours, 2),
         "alerts_count": len(report.alerts),
         "entries_report": len(entries_report),

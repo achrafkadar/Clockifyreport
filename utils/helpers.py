@@ -8,6 +8,18 @@ def esc(s: Optional[str]) -> str:
     return html.escape(s or "", quote=True)
 
 
+def parse_email_recipients(raw: str) -> list[str]:
+    """Plusieurs adresses séparées par des virgules ou points-virgules."""
+    if not raw or not raw.strip():
+        return []
+    out: list[str] = []
+    for part in raw.replace(";", ",").split(","):
+        p = part.strip()
+        if p and "@" in p:
+            out.append(p)
+    return out
+
+
 def fmt_hours(h: float) -> str:
     return f"{h:.2f} h"
 
