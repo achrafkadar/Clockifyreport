@@ -16,6 +16,11 @@ class I18n:
 
 
 _FR = {
+    "hero_title": "Rapport quotidien de productivité",
+    "hero_sub": "Vue globale de l'activité et des anomalies",
+    "progress_section": "Temps par personne (référence 8 h)",
+    "team_alerts_title": "Alertes équipe",
+    "annex": "Synthèse projets & classement",
     "title": "Rapport temps — équipe",
     "summary": "Vue d'ensemble",
     "total_team": "Heures équipe",
@@ -54,6 +59,11 @@ _FR = {
 }
 
 _EN = {
+    "hero_title": "Daily productivity report",
+    "hero_sub": "Activity overview and anomalies",
+    "progress_section": "Time per person (8 h reference)",
+    "team_alerts_title": "Team alerts",
+    "annex": "Projects & ranking",
     "title": "Team time report",
     "summary": "Overview",
     "total_team": "Team hours",

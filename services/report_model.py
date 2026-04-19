@@ -46,6 +46,16 @@ class ProjectStat:
 
 
 @dataclass
+class RepeatedTaskRow:
+    """Tâche longue répétée sur 2 jours consécutifs."""
+
+    employee_name: str
+    task_name: str
+    hours_report_day: float
+    hours_previous_day: float
+
+
+@dataclass
 class DailyReportData:
     report_date: date
     period_label: str
@@ -70,4 +80,7 @@ class DailyReportData:
     other_hours: float = 0.0
     uncategorized_hours: float = 0.0
     repeated_task_notes: list[str] = field(default_factory=list)
+    repeated_tasks: list[RepeatedTaskRow] = field(default_factory=list)
+    # Alertes « équipe » : temps faible / élevé / aucune activité / trop d'entrées / horaires
+    team_alerts: list[AlertItem] = field(default_factory=list)
     raw_meta: dict[str, Any] = field(default_factory=dict)

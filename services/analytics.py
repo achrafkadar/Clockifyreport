@@ -14,7 +14,18 @@ from services.clockify_client import (
     entry_start_local,
     user_label,
 )
-from services.report_model import AlertItem, AlertLevel, DailyReportData, EmployeeMetrics, ProjectStat
+from services.report_model import (
+    AlertItem,
+    AlertLevel,
+    DailyReportData,
+    EmployeeMetrics,
+    ProjectStat,
+    RepeatedTaskRow,
+)
+
+TEAM_ALERT_TITLES = frozenset(
+    {"Temps faible", "Temps élevé", "Aucun temps", "Beaucoup d'entrées", "Horaire atypique"}
+)
 
 
 def _hours_by_user(entries: list[dict[str, Any]], user_names: dict[str, str]) -> dict[str, float]:
@@ -231,19 +242,31 @@ def build_daily_report(
     # Tâches répétées 2 jours (même user + task_id > seuil sur J et J-1)
     ut_r = _user_task_hours(entries_report, unames)
     ut_p = _user_task_hours(entries_compare, unames)
-    repeated_notes: list[str] = []
+    uid_tid_label: dict[tuple[str, str], str] = {}
+    for e in entries_report:
+        uid, _ = user_label(e, unames)
+        _, _, tid, tname = entry_project_task(e)
+        if tid:
+            uid_tid_label[(uid, tid)] = tname if tname != "—" else "Tâche"
+
+    repeated_rows: list[RepeatedTaskRow] = []
     for (uid, tid), hr in ut_r.items():
-        if not tid or tid == "":
+        if not tid:
             continue
         hp = ut_p.get((uid, tid), 0.0)
         if hr >= cfg.long_task_repeat_hours and hp >= cfg.long_task_repeat_hours:
-            pname = unames.get(uid, uid)
-            repeated_notes.append(
-                f"{pname} — tâche {tid[:8]}… : {hr:.1f} h aujourd'hui et {hp:.1f} h la veille (≥ {cfg.long_task_repeat_hours:g} h chaque jour)."
+            repeated_rows.append(
+                RepeatedTaskRow(
+                    employee_name=unames.get(uid, uid),
+                    task_name=uid_tid_label.get((uid, tid), "Tâche"),
+                    hours_report_day=hr,
+                    hours_previous_day=hp,
+                )
             )
-
-    for note in repeated_notes[:15]:
-        alerts.append(AlertItem(AlertLevel.WARNING, "Répétition sur 2 jours", note))
+    repeated_notes = [
+        f"{r.employee_name} — «{r.task_name}» : {r.hours_report_day:.1f} h + {r.hours_previous_day:.1f} h (2 j)"
+        for r in repeated_rows
+    ]
 
     # Projets
     proj_map = _hours_by_project_team(entries_report, unames)
@@ -330,6 +353,8 @@ def build_daily_report(
     top_r = ranked[:3]
     bottom_r = sorted([x for x in ranked], key=lambda x: x[1])[:3]
 
+    team_alerts = [a for a in alerts if a.title in TEAM_ALERT_TITLES]
+
     return DailyReportData(
         report_date=report_date,
         period_label=period_label,
@@ -354,6 +379,8 @@ def build_daily_report(
         other_hours=oth,
         uncategorized_hours=unc,
         repeated_task_notes=repeated_notes,
+        repeated_tasks=repeated_rows,
+        team_alerts=team_alerts,
         raw_meta={"entries_report": len(entries_report), "entries_compare": len(entries_compare)},
     )
 
@@ -425,5 +452,12 @@ def mock_report_data() -> DailyReportData:
         priority_hours=18.0,
         other_hours=13.5,
         uncategorized_hours=2.0,
-        repeated_task_notes=["Oussama — tâche montage répétée sur 2 jours."],
+        repeated_task_notes=[],
+        repeated_tasks=[
+            RepeatedTaskRow("Oussama", "Montage vidéo", 3.5, 2.8),
+        ],
+        team_alerts=[
+            AlertItem(AlertLevel.CRITICAL, "Temps élevé", "Lee : 11.2 h (> 10 h)."),
+            AlertItem(AlertLevel.WARNING, "Temps faible", "Kim : 3.5 h (< 4 h)."),
+        ],
     )
