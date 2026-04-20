@@ -18,7 +18,8 @@ from services.analytics import mock_report_data
 from templates.email_report import render_email_html
 from utils.i18n import I18n
 
-load_dotenv()
+load_dotenv(".env")
+load_dotenv("settings.env")
 
 app = FastAPI(title="Clockify daily report", version="2.0.0")
 

@@ -40,13 +40,29 @@ def fetch_workspace_users(client: httpx.Client, api_key: str, workspace_id: str)
     return r.json()
 
 
+def _detailed_max_pages() -> int:
+    raw = (os.environ.get("CLOCKIFY_DETAILED_MAX_PAGES") or "1000").strip()
+    try:
+        n = int(raw)
+    except ValueError:
+        n = 1000
+    return max(1, min(n, 50_000))
+
+
 def fetch_detailed_time_entries(
     client: httpx.Client, api_key: str, workspace_id: str, start: datetime, end: datetime
 ) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     page = 1
     page_size = 200
+    max_pages = _detailed_max_pages()
+    prev_fingerprint: Optional[tuple[str, ...]] = None
     while True:
+        if page > max_pages:
+            raise RuntimeError(
+                f"Clockify reports/detailed : pagination arrêtée après {max_pages} page(s) "
+                f"({len(entries)} entrées). Augmentez CLOCKIFY_DETAILED_MAX_PAGES si nécessaire."
+            )
         body: dict[str, Any] = {
             "dateRangeStart": start.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
             "dateRangeEnd": end.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
@@ -64,6 +80,16 @@ def fetch_detailed_time_entries(
         batch = data.get("timeentries") or data.get("timeEntries") or []
         if not batch:
             break
+        # Si l'API renvoie toujours la même page, éviter une boucle infinie.
+        ids = tuple(
+            f"{x.get('id')}|{(x.get('timeInterval') or {}).get('start')}" for x in batch[:page_size]
+        )
+        if prev_fingerprint is not None and ids == prev_fingerprint:
+            raise RuntimeError(
+                "Clockify reports/detailed : la page suivante est identique à la précédente "
+                "(pagination bloquée côté API). Vérifiez la clé API / le workspace."
+            )
+        prev_fingerprint = ids
         entries.extend(batch)
         if len(batch) < page_size:
             break
