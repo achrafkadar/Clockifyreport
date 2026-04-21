@@ -23,9 +23,52 @@ from services.report_model import (
     RepeatedTaskRow,
 )
 
-TEAM_ALERT_TITLES = frozenset(
-    {"Temps faible", "Temps élevé", "Aucun temps", "Beaucoup d'entrées", "Horaire atypique"}
-)
+TEAM_ALERT_ONLY_TITLE = "Aucun temps"
+
+
+def _project_day_insight_lines(
+    entries: list[dict[str, Any]],
+    unames: dict[str, str],
+    locale: str,
+    max_lines: int = 32,
+) -> list[str]:
+    """Projets travaillés sur la période du rapport, avec contributeurs."""
+    proj_h: dict[str, float] = defaultdict(float)
+    proj_users: dict[str, set[str]] = defaultdict(set)
+    for e in entries:
+        uid, uname = user_label(e, unames)
+        _, pname, _, _ = entry_project_task(e)
+        proj_h[pname] += entry_duration_seconds(e) / 3600.0
+        if uid != "unknown":
+            proj_users[pname].add(uname)
+    items = sorted(proj_h.items(), key=lambda x: -x[1])
+    lines: list[str] = []
+    fr = locale != "en"
+    for pname, hrs in items[:max_lines]:
+        people = sorted(proj_users[pname])
+        nu = len(people)
+        if nu == 0:
+            people_s = "—"
+        elif nu <= 5:
+            people_s = ", ".join(people)
+        else:
+            people_s = ", ".join(people[:5]) + (f" (+{nu - 5})" if fr else f" (+{nu - 5})")
+        if fr:
+            lines.append(f"«{pname}» : {hrs:.2f} h — {people_s} ({nu} pers.)")
+        else:
+            lines.append(f"«{pname}»: {hrs:.2f} h — {people_s} ({nu} people)")
+    if len(items) > max_lines:
+        if fr:
+            lines.append(f"… et {len(items) - max_lines} autre(s) projet(s).")
+        else:
+            lines.append(f"… and {len(items) - max_lines} more project(s).")
+    if not lines:
+        return (
+            ["Aucun temps projet sur la période."]
+            if fr
+            else ["No project time logged for this period."]
+        )
+    return lines
 
 
 def _hours_by_user(entries: list[dict[str, Any]], user_names: dict[str, str]) -> dict[str, float]:
@@ -277,15 +320,11 @@ def build_daily_report(
     projects.sort(key=lambda x: -x.hours)
     top3 = projects[:3]
 
-    # Insights
+    # Insights : projets touchés sur la journée (même période que le rapport)
     prod, nonp = _productive_split(entries_report, unames)
     pri, oth = _priority_hours(entries_report, unames, cfg)
     unc = _uncategorized_hours(entries_report, unames)
-    insight_lines = [
-        f"{prod:.2f} h facturables vs {nonp:.2f} h non facturables (lignes sans info : traitées comme « autre »).",
-        f"Projets prioritaires (config) : {pri:.2f} h ; autres : {oth:.2f} h.",
-        f"Temps sans projet explicite : {unc:.2f} h.",
-    ]
+    insight_lines = _project_day_insight_lines(entries_report, unames, cfg.locale)
     # Employés : main project %, trend, score, status
     uproj = defaultdict(lambda: defaultdict(float))
     for e in entries_report:
@@ -295,9 +334,17 @@ def build_daily_report(
 
     dtc = _distinct_task_counts(entries_report, unames)
 
+    active_uids: list[str] = []
+    for u in workspace_users:
+        if (u.get("status") or "").upper() != "ACTIVE":
+            continue
+        uid = u.get("id")
+        if not uid:
+            continue
+        active_uids.append(uid)
+
     employees: list[EmployeeMetrics] = []
-    user_ids = [uid for uid in hu_report if uid != "unknown"]
-    for uid in sorted(user_ids, key=lambda x: -hu_report.get(x, 0.0)):
+    for uid in active_uids:
         total = hu_report.get(uid, 0.0)
         prev = hu_prev.get(uid, 0.0)
         if prev > 1e-9:
@@ -308,13 +355,15 @@ def build_daily_report(
 
         mp_name = ""
         mp_pct = 0.0
-        if uproj[uid]:
+        if uproj[uid] and total > 1e-9:
             mp_name = max(uproj[uid].items(), key=lambda x: x[1])[0]
             mp_pct = (uproj[uid][mp_name] / total * 100.0) if total > 1e-9 else 0.0
 
         status = AlertLevel.OK
         if total < 1e-6 and wd:
             status = AlertLevel.CRITICAL
+        elif total < 1e-6:
+            status = AlertLevel.OK
         elif total < cfg.low_hours_warning:
             status = AlertLevel.WARNING
         elif total > cfg.high_hours_warning:
@@ -325,7 +374,7 @@ def build_daily_report(
             score += 1
         if status == AlertLevel.OK:
             score += 1
-        if wd and total < cfg.low_hours_warning:
+        if wd and 1e-9 < total < cfg.low_hours_warning:
             score -= 1
         if total > cfg.high_hours_warning:
             score -= 1
@@ -348,12 +397,22 @@ def build_daily_report(
             )
         )
 
-    ranked = [(e.name, e.total_hours) for e in employees if e.total_hours > 0]
-    ranked.sort(key=lambda x: -x[1])
-    top_r = ranked[:3]
-    bottom_r = sorted([x for x in ranked], key=lambda x: x[1])[:3]
+    employees.sort(
+        key=lambda e: (
+            0 if e.total_hours > 1e-6 else 1,
+            -e.total_hours if e.total_hours > 1e-6 else 0.0,
+            e.name.lower(),
+        )
+    )
 
-    team_alerts = [a for a in alerts if a.title in TEAM_ALERT_TITLES]
+    ranked_pos = [(e.name, e.total_hours) for e in employees if e.total_hours > 1e-6]
+    ranked_pos.sort(key=lambda x: -x[1])
+    top_r = ranked_pos[:3]
+    ranked_all = [(e.name, e.total_hours) for e in employees]
+    ranked_all.sort(key=lambda x: x[1])
+    bottom_r = ranked_all[:3]
+
+    team_alerts = [a for a in alerts if a.title == TEAM_ALERT_ONLY_TITLE]
 
     return DailyReportData(
         report_date=report_date,
@@ -381,6 +440,7 @@ def build_daily_report(
         repeated_task_notes=repeated_notes,
         repeated_tasks=repeated_rows,
         team_alerts=team_alerts,
+        daily_reference_hours=cfg.project_expected_hours,
         raw_meta={"entries_report": len(entries_report), "entries_compare": len(entries_compare)},
     )
 
@@ -431,10 +491,24 @@ def mock_report_data() -> DailyReportData:
                 0,
                 "",
             ),
+            EmployeeMetrics(
+                "3",
+                "Zoe",
+                0.0,
+                0,
+                0,
+                "—",
+                0.0,
+                0.0,
+                "→",
+                AlertLevel.CRITICAL,
+                0,
+                "",
+            ),
         ],
         insight_lines=[
-            "24 h facturables vs 7.5 h non facturables.",
-            "Prioritaires : 18 h ; autres : 13.5 h.",
+            "«Client A» : 14.00 h — Alice, Oussama (2 pers.)",
+            "«Montage» : 10.50 h — Oussama (1 pers.)",
         ],
         projects=[
             ProjectStat("p1", "Client A", 14.0, False),
@@ -457,7 +531,7 @@ def mock_report_data() -> DailyReportData:
             RepeatedTaskRow("Oussama", "Montage vidéo", 3.5, 2.8),
         ],
         team_alerts=[
-            AlertItem(AlertLevel.CRITICAL, "Temps élevé", "Lee : 11.2 h (> 10 h)."),
-            AlertItem(AlertLevel.WARNING, "Temps faible", "Kim : 3.5 h (< 4 h)."),
+            AlertItem(AlertLevel.CRITICAL, "Aucun temps", "Kim : 0 h enregistré (jour ouvré)."),
         ],
+        daily_reference_hours=8.0,
     )

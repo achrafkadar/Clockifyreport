@@ -81,6 +81,8 @@ class DailyReportData:
     uncategorized_hours: float = 0.0
     repeated_task_notes: list[str] = field(default_factory=list)
     repeated_tasks: list[RepeatedTaskRow] = field(default_factory=list)
-    # Alertes « équipe » : temps faible / élevé / aucune activité / trop d'entrées / horaires
+    # Alertes équipe (filtrées côté analytics : ex. seulement « Aucun temps »)
     team_alerts: list[AlertItem] = field(default_factory=list)
+    # Référence affichée type « 0 h / 8 h » et barres de progression
+    daily_reference_hours: float = 8.0
     raw_meta: dict[str, Any] = field(default_factory=dict)

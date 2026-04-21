@@ -30,16 +30,19 @@ def format_report_date(d: date, locale: str) -> str:
     return f"{d.day} {_MOIS_FR[d.month - 1]} {d.year}"
 
 
-def progress_bar_8h_html(hours: float, width_px: int = 260) -> tuple[str, str]:
+def progress_bar_8h_html(hours: float, width_px: int = 260, ref_hours: float = 8.0) -> tuple[str, str]:
     """
-    Barre sur 8 h. Couleur : vert >7h, orange 5–7h, rouge <5h.
-    Retourne (html_table, label_couleur pour accessibilité).
+    Barre sur une journée de référence (souvent 8 h).
+    Couleur : vert > ~87,5 %, orange ~62,5–87,5 %, rouge en dessous.
     """
-    pct = min(100.0, max(0.0, (hours / 8.0) * 100.0))
+    ref = ref_hours if ref_hours > 1e-9 else 8.0
+    pct = min(100.0, max(0.0, (hours / ref) * 100.0))
     inner = int(round((pct / 100.0) * width_px))
-    if hours > 7:
+    hi = ref * 7.0 / 8.0
+    mid = ref * 5.0 / 8.0
+    if hours > hi:
         fill, label = "#16a34a", "OK"
-    elif hours >= 5:
+    elif hours >= mid:
         fill, label = "#ea580c", "Attention"
     else:
         fill, label = "#dc2626", "Faible"
@@ -49,7 +52,7 @@ def progress_bar_8h_html(hours: float, width_px: int = 260) -> tuple[str, str]:
         f'background:{track};border-radius:999px;overflow:hidden;border-collapse:collapse;">'
         f'<tr><td style="width:{inner}px;min-width:8px;height:12px;background:{fill};border-radius:999px 0 0 999px;"></td>'
         f'<td style="background:{track};"></td></tr></table>'
-        f'<span style="font-size:11px;color:#64748b;margin-left:8px;">{pct:.0f}% / 8h</span>'
+        f'<span style="font-size:11px;color:#64748b;margin-left:8px;">{pct:.0f}% / {ref:g} h</span>'
     )
     return html_bar, label
 
