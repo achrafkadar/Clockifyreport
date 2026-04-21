@@ -85,4 +85,10 @@ class DailyReportData:
     team_alerts: list[AlertItem] = field(default_factory=list)
     # Référence affichée type « 0 h / 8 h » et barres de progression
     daily_reference_hours: float = 8.0
+    # Carte KPI « vs veille » : textes pré-calculés (évite % absurdes si veille ~ 0)
+    kpi_vs_primary: str = ""
+    kpi_vs_secondary: str = ""
+    # Tâches / projets au-delà du seuil (ex. > 3 h sur la même tâche)
+    long_task_alerts: list[AlertItem] = field(default_factory=list)
+    long_task_threshold_hours: float = 3.0
     raw_meta: dict[str, Any] = field(default_factory=dict)

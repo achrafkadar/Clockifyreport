@@ -59,6 +59,14 @@ _FR = {
     "repeated_tasks": "Tâches longues répétées (2 jours)",
     "hours_vs_ref": "Temps saisi / objectif journée",
     "progress_legend": "Référence journée",
+    "kpi_strip_title": "Synthèse équipe",
+    "kpi_strip_sub": "Vue d’ensemble sur la période du rapport",
+    "kpi_team_hint": "Cumul toutes les personnes",
+    "kpi_active_hint": "Avec du temps sur la période",
+    "kpi_avg_hint": "Moyenne sur personnes actives",
+    "long_tasks_block_title": "Tâches & projets longs",
+    "long_tasks_block_sub": "Même tâche au-delà de {n} h (cumul sur la journée).",
+    "long_tasks_none": "Aucune tâche ou projet ne dépasse le seuil sur cette journée.",
     "projects_flagged": "Projets au-delà du budget indicatif",
 }
 
@@ -106,5 +114,13 @@ _EN = {
     "repeated_tasks": "Repeated long tasks (2 days)",
     "hours_vs_ref": "Logged / daily target",
     "progress_legend": "Daily reference",
+    "kpi_strip_title": "Team snapshot",
+    "kpi_strip_sub": "Overview for this report period",
+    "kpi_team_hint": "Sum of all logged time",
+    "kpi_active_hint": "People who logged time",
+    "kpi_avg_hint": "Average among active people",
+    "long_tasks_block_title": "Long tasks & projects",
+    "long_tasks_block_sub": "Same task over {n} h (total for the day).",
+    "long_tasks_none": "No task or project exceeds the threshold for this day.",
     "projects_flagged": "Projects over soft budget",
 }

@@ -24,6 +24,45 @@ from services.report_model import (
 )
 
 TEAM_ALERT_ONLY_TITLE = "Aucun temps"
+LONG_TASK_ALERT_TITLE = "Tâche / projet long"
+
+
+def _kpi_veille_lines(
+    locale: str,
+    total_team: float,
+    prev_team: float,
+    pct: float,
+    arrow: str,
+) -> tuple[str, str]:
+    """Libellés carte « vs veille » : préfère Δ heures si la veille est quasi vide ou % peu parlant."""
+    fr = locale != "en"
+    delta = total_team - prev_team
+    sign_pct = "+" if pct > 0 else ""
+
+    if prev_team < 1e-6 and total_team < 1e-6:
+        return ("0 %", "Aucune heure les deux jours" if fr else "No hours either day")
+    # Veille quasi nulle mais activité aujourd'hui → % trompeur
+    if prev_team < 0.2 and total_team > 0.2:
+        p1 = f"{arrow} {delta:+.2f} h"
+        p2 = (
+            f"veille {prev_team:.2f} h — le % masqué (base trop faible)"
+            if fr
+            else f"prev. {prev_team:.2f} h — % hidden (low baseline)"
+        )
+        return (p1, p2)
+    # % extrême avec petite base
+    if abs(pct) > 300 and prev_team < 2.0:
+        p1 = f"{arrow} {delta:+.2f} h"
+        p2 = (
+            f"veille {prev_team:.2f} h — variation forte (voir Δ h)"
+            if fr
+            else f"prev. {prev_team:.2f} h — use hour delta"
+        )
+        return (p1, p2)
+
+    p1 = f"{arrow} {sign_pct}{pct:.1f} %"
+    p2 = f"{prev_team:.2f} h à la veille" if fr else f"{prev_team:.2f} h previous day"
+    return (p1, p2)
 
 
 def _project_day_insight_lines(
@@ -243,7 +282,7 @@ def build_daily_report(
         alerts.append(
             AlertItem(
                 AlertLevel.WARNING,
-                "Tâche / projet long",
+                LONG_TASK_ALERT_TITLE,
                 f"{uname} — «{pname}» ({tname}) : {hrs:.2f} h (> {cfg.task_alert_hours:g} h).",
             )
         )
@@ -413,6 +452,10 @@ def build_daily_report(
     bottom_r = ranked_all[:3]
 
     team_alerts = [a for a in alerts if a.title == TEAM_ALERT_ONLY_TITLE]
+    long_task_alerts = [a for a in alerts if a.title == LONG_TASK_ALERT_TITLE]
+    kpi_vs_primary, kpi_vs_secondary = _kpi_veille_lines(
+        cfg.locale, total_team, prev_team, pct, arrow
+    )
 
     return DailyReportData(
         report_date=report_date,
@@ -441,6 +484,10 @@ def build_daily_report(
         repeated_tasks=repeated_rows,
         team_alerts=team_alerts,
         daily_reference_hours=cfg.project_expected_hours,
+        kpi_vs_primary=kpi_vs_primary,
+        kpi_vs_secondary=kpi_vs_secondary,
+        long_task_alerts=long_task_alerts,
+        long_task_threshold_hours=cfg.task_alert_hours,
         raw_meta={"entries_report": len(entries_report), "entries_compare": len(entries_compare)},
     )
 
@@ -459,7 +506,7 @@ def mock_report_data() -> DailyReportData:
         team_pct_change_vs_prev=12.5,
         team_change_arrow="↑",
         alerts=[
-            AlertItem(AlertLevel.WARNING, "Tâche / projet long", "Oussama — « Montage » : 4.5 h (> 3 h)."),
+            AlertItem(AlertLevel.WARNING, LONG_TASK_ALERT_TITLE, "Oussama — « Montage » : 4.5 h (> 3 h)."),
             AlertItem(AlertLevel.CRITICAL, "Temps élevé", "Lee : 11.2 h (> 10 h)."),
         ],
         employees=[
@@ -534,4 +581,10 @@ def mock_report_data() -> DailyReportData:
             AlertItem(AlertLevel.CRITICAL, "Aucun temps", "Kim : 0 h enregistré (jour ouvré)."),
         ],
         daily_reference_hours=8.0,
+        kpi_vs_primary="↑ +12.5 %",
+        kpi_vs_secondary="28.00 h à la veille",
+        long_task_alerts=[
+            AlertItem(AlertLevel.WARNING, LONG_TASK_ALERT_TITLE, "Oussama — « Montage » : 4.5 h (> 3 h)."),
+        ],
+        long_task_threshold_hours=3.0,
     )

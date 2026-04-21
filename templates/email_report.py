@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from services.report_model import AlertLevel, DailyReportData
+from services.report_model import AlertLevel, DailyReportData, AlertItem
 from utils.helpers import (
     esc,
     fmt_hours,
@@ -20,20 +20,125 @@ def _alert_style(level: AlertLevel) -> tuple[str, str, str]:
     return "#15803d", "#f0fdf4", "🟢"
 
 
-def _kpi_cell(icon: str, label: str, value_html: str, sub: str = "") -> str:
-    sub_html = f'<p style="margin:8px 0 0;font-size:11px;color:#94a3b8;line-height:1.35;">{sub}</p>' if sub else ""
+def _kpi_metric_card(
+    accent: str,
+    tint_bg: str,
+    icon: str,
+    label: str,
+    value_html: str,
+    sub: str = "",
+) -> str:
+    sub_html = (
+        f'<p style="margin:10px 0 0;font-size:11px;color:#64748b;line-height:1.45;font-weight:500;">{esc(sub)}</p>'
+        if sub
+        else ""
+    )
     return (
-        f'<td style="width:25%;vertical-align:top;padding:6px;">'
+        f'<td style="width:50%;vertical-align:top;padding:8px;">'
         f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
-        f'style="border-radius:16px;border:1px solid #e2e8f0;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);'
-        f'box-shadow:0 2px 16px rgba(15,23,42,0.06);min-height:120px;">'
-        f'<tr><td style="padding:18px 16px;text-align:center;">'
-        f'<p style="margin:0 0 10px;font-size:22px;line-height:1;">{icon}</p>'
-        f'<p style="margin:0;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;">{esc(label)}</p>'
-        f'<p style="margin:10px 0 0;font-size:21px;font-weight:800;color:#0f172a;letter-spacing:-0.02em;line-height:1.15;">{value_html}</p>'
+        f'style="border-radius:18px;border:1px solid #e8ecf0;background:{tint_bg};'
+        f'box-shadow:0 4px 20px rgba(15,23,42,0.07);overflow:hidden;">'
+        f'<tr><td style="height:4px;background:{accent};line-height:4px;font-size:0;">&nbsp;</td></tr>'
+        f'<tr><td style="padding:20px 18px 22px;text-align:center;">'
+        f'<p style="margin:0 0 12px;font-size:26px;line-height:1;">{icon}</p>'
+        f'<p style="margin:0;font-size:9px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;">{esc(label)}</p>'
+        f'<p style="margin:12px 0 0;font-size:26px;font-weight:900;color:#0f172a;letter-spacing:-0.04em;line-height:1.1;">{value_html}</p>'
         f"{sub_html}"
         f"</td></tr></table></td>"
     )
+
+
+def _kpi_dashboard_html(data: DailyReportData, i18n: I18n) -> str:
+    """Bloc KPI 2×2 : cartes premium + en-tête."""
+    pct = data.team_pct_change_vs_prev
+    sign = "+" if pct > 0 else ""
+    if getattr(data, "kpi_vs_primary", None):
+        vs_val = f'<span style="color:#5b21b6;">{esc(data.kpi_vs_primary)}</span>'
+        vs_sub = esc(data.kpi_vs_secondary) if data.kpi_vs_secondary else ""
+    else:
+        vs_val = f'<span style="color:#5b21b6;">{esc(data.team_change_arrow)} {sign}{pct:.1f} %</span>'
+        vs_sub = esc(f"{fmt_hours(data.prev_team_total)} h · veille")
+    strip = f"""
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:14px;border-radius:14px;background:linear-gradient(90deg,#0f172a 0%,#1e1b4b 45%,#312e81 100%);">
+<tr><td style="padding:14px 20px;text-align:center;">
+<p style="margin:0;font-size:10px;font-weight:800;letter-spacing:0.2em;text-transform:uppercase;color:#a5b4fc;">{esc(i18n.t("kpi_strip_title"))}</p>
+<p style="margin:6px 0 0;font-size:12px;color:#c7d2fe;line-height:1.45;">{esc(i18n.t("kpi_strip_sub"))}</p>
+</td></tr></table>
+"""
+    row1 = (
+        "<tr>"
+        + _kpi_metric_card(
+            "#4f46e5",
+            "linear-gradient(180deg,#ffffff 0%,#eef2ff 100%)",
+            "📊",
+            i18n.t("total_team"),
+            esc(fmt_hours(data.total_team_hours)),
+            i18n.t("kpi_team_hint"),
+        )
+        + _kpi_metric_card(
+            "#0d9488",
+            "linear-gradient(180deg,#ffffff 0%,#ecfdf5 100%)",
+            "👥",
+            i18n.t("active_people"),
+            f'<span style="color:#0f766e;">{data.active_employees}</span>',
+            i18n.t("kpi_active_hint"),
+        )
+        + "</tr>"
+    )
+    row2 = (
+        "<tr>"
+        + _kpi_metric_card(
+            "#d97706",
+            "linear-gradient(180deg,#ffffff 0%,#fffbeb 100%)",
+            "⚖️",
+            i18n.t("avg_hours"),
+            esc(fmt_hours(data.avg_hours_per_employee)),
+            i18n.t("kpi_avg_hint"),
+        )
+        + _kpi_metric_card(
+            "#7c3aed",
+            "linear-gradient(180deg,#ffffff 0%,#f5f3ff 100%)",
+            "📈",
+            i18n.t("vs_yesterday"),
+            vs_val,
+            vs_sub,
+        )
+        + "</tr>"
+    )
+    return (
+        strip
+        + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">'
+        + row1
+        + row2
+        + "</table>"
+    )
+
+
+def _long_tasks_section(data: DailyReportData, i18n: I18n) -> str:
+    thr = data.long_task_threshold_hours if data.long_task_threshold_hours > 1e-9 else 3.0
+    sub = esc(i18n.t("long_tasks_block_sub").replace("{n}", f"{thr:g}"))
+    items: list[AlertItem] = list(data.long_task_alerts or [])
+    body_parts: list[str] = []
+    for a in items[:28]:
+        border, bg, ic = _alert_style(a.level)
+        body_parts.append(
+            f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;">'
+            f'<tr><td style="border-left:4px solid {border};background:{bg};padding:14px 16px;border-radius:0 14px 14px 0;">'
+            f'<p style="margin:0 0 6px;font-size:12px;font-weight:800;color:#9a3412;">{ic} {esc(a.title)}</p>'
+            f'<p style="margin:0;font-size:14px;color:#431407;line-height:1.55;">{esc(a.detail)}</p>'
+            f"</td></tr></table>"
+        )
+    inner = "".join(body_parts) if body_parts else (
+        f'<p style="margin:0;font-size:14px;color:#64748b;text-align:center;">{esc(i18n.t("long_tasks_none"))}</p>'
+    )
+    return f"""
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;border-radius:20px;border:1px solid #fed7aa;background:linear-gradient(180deg,#fffbeb 0%,#ffffff 55%);box-shadow:0 6px 24px rgba(124,45,18,0.08);">
+<tr><td style="padding:22px 20px;">
+<p style="margin:0;font-size:18px;font-weight:900;color:#9a3412;text-align:center;letter-spacing:-0.02em;">⏳ {esc(i18n.t("long_tasks_block_title"))}</p>
+<p style="margin:8px 0 18px;font-size:12px;color:#b45309;text-align:center;line-height:1.45;">{sub}</p>
+{inner}
+</td></tr></table>
+"""
 
 
 def _insights_two_columns(lines: list[str], i18n: I18n) -> str:
@@ -64,8 +169,6 @@ def _insights_two_columns(lines: list[str], i18n: I18n) -> str:
 def render_email_html(data: DailyReportData, i18n: I18n) -> str:
     ws = esc(data.workspace_name)
     date_str = esc(format_report_date(data.report_date, i18n.locale))
-    pct = data.team_pct_change_vs_prev
-    sign = "+" if pct > 0 else ""
     ref = data.daily_reference_hours if data.daily_reference_hours > 1e-9 else 8.0
     ref_s = esc(fmt_hours(ref))
 
@@ -83,15 +186,8 @@ def render_email_html(data: DailyReportData, i18n: I18n) -> str:
 </td></tr></table>
 """
 
-    vs_prev = f"{esc(data.team_change_arrow)} {sign}{pct:.1f} % · {fmt_hours(data.prev_team_total)} veille"
-    kpi_row = (
-        "<table role='presentation' width='100%' cellpadding='0' cellspacing='0'><tr>"
-        + _kpi_cell("📊", i18n.t("total_team"), esc(fmt_hours(data.total_team_hours)))
-        + _kpi_cell("👥", i18n.t("active_people"), str(data.active_employees))
-        + _kpi_cell("⚖️", i18n.t("avg_hours"), esc(fmt_hours(data.avg_hours_per_employee)))
-        + _kpi_cell("📈", i18n.t("vs_yesterday"), f'<span style="color:#4f46e5;">{esc(data.team_change_arrow)} {sign}{pct:.1f} %</span>', vs_prev)
-        + "</tr></table>"
-    )
+    kpi_block = _kpi_dashboard_html(data, i18n)
+    long_tasks_html = _long_tasks_section(data, i18n)
 
     prog_cards = []
     for em in data.employees:
@@ -206,7 +302,8 @@ def render_email_html(data: DailyReportData, i18n: I18n) -> str:
 <table role="presentation" width="100%" style="max-width:620px;border-collapse:collapse;">
 <tr><td style="padding:0 4px;">
 {hero}
-{kpi_row}
+{kpi_block}
+{long_tasks_html}
 {progress_section}
 {alerts_section}
 {insights_section}
